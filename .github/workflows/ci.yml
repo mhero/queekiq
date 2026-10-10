@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - run: bundle exec rubocop
+
+  test:
+    name: test (ruby ${{ matrix.ruby }}, redis gem ${{ matrix.redis-gem }}, ${{ matrix.redis-image }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # redis gem 6.x needs Ruby >= 3.2, so Ruby 3.1 runs with redis 5.x.
+          - { ruby: "3.1", redis-gem: "~> 5.0", redis-image: "redis:7.4-alpine" }
+          - { ruby: "3.2", redis-gem: "~> 6.0", redis-image: "redis:7.4-alpine" }
+          - { ruby: "3.3", redis-gem: "~> 6.0", redis-image: "redis:7.4-alpine" }
+          - { ruby: "3.4", redis-gem: "~> 6.0", redis-image: "redis:7.4-alpine" }
+          # Older redis gems, and the oldest supported Redis server.
+          - { ruby: "3.4", redis-gem: "~> 5.0", redis-image: "redis:7.4-alpine" }
+          - { ruby: "3.4", redis-gem: "~> 4.8", redis-image: "redis:7.4-alpine" }
+          - { ruby: "3.4", redis-gem: "~> 6.0", redis-image: "redis:7.0-alpine" }
+    services:
+      redis:
+        image: ${{ matrix.redis-image }}
+        ports: [ "6379:6379" ]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      REDIS_URL: redis://localhost:6379/0
+      REDIS_GEM_VERSION: ${{ matrix.redis-gem }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+          cache-version: redis-gem-${{ matrix.redis-gem }}
+      - run: bundle exec rake
+
+  build:
+    name: build gem
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+      - name: Build and smoke-test the packaged gem
+        run: |
+          gem build queekiq.gemspec
+          gem install ./queekiq-*.gem
+          ruby -e 'require "queekiq"; puts "queekiq #{Queekiq::VERSION} loaded"'

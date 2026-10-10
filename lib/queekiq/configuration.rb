@@ -8,7 +8,7 @@ module Queekiq
     DEFAULT_REDIS_URL = "redis://localhost:6379/0".freeze
 
     attr_accessor :redis_url
-    attr_writer :redis, :logger
+    attr_writer :redis, :logger, :instrumenter
 
     def initialize
       @redis_url = ENV.fetch("REDIS_URL", DEFAULT_REDIS_URL)
@@ -23,6 +23,12 @@ module Queekiq
     # logger on $stdout.
     def logger
       @logger || default_logger
+    end
+
+    # Receives the events workers emit (see Instrumenter). Defaults to a
+    # built-in Instrumenter; anything with the same #instrument call shape works.
+    def instrumenter
+      @instrumenter ||= Instrumenter.new
     end
 
     private

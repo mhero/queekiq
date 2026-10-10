@@ -31,6 +31,20 @@ RSpec.describe Queekiq::Configuration do
     end
   end
 
+  describe "#instrumenter" do
+    it "defaults to a built-in Instrumenter, memoized" do
+      expect(config.instrumenter).to be_a(Queekiq::Instrumenter)
+      expect(config.instrumenter).to equal(config.instrumenter)
+    end
+
+    it "can be replaced, e.g. by ActiveSupport::Notifications" do
+      custom = double("instrumenter")
+      config.instrumenter = custom
+
+      expect(config.instrumenter).to equal(custom)
+    end
+  end
+
   describe "#logger" do
     it "returns an assigned logger" do
       logger = Logger.new(nil)
@@ -72,6 +86,15 @@ RSpec.describe Queekiq do
   it "exposes the configured redis client and logger" do
     expect(described_class.redis).to equal(described_class.configuration.redis)
     expect(described_class.logger).to equal(described_class.configuration.logger)
+  end
+
+  it "subscribes to events through the global instrumenter" do
+    events = []
+    described_class.subscribe("x.queekiq") { |name, _| events << name }
+
+    described_class.instrumenter.instrument("x.queekiq")
+
+    expect(events).to eq([ "x.queekiq" ])
   end
 
   it "drops the configuration on reset!" do

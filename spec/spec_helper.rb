@@ -15,5 +15,8 @@ RSpec.configure do |config|
 
   config.shared_context_metadata_behavior = :apply_to_host_groups
 
-  config.before { Queekiq.configuration.logger = Logger.new(nil) }
+  config.before do
+    Queekiq.configuration.logger = Logger.new(nil)
+    Queekiq.configuration.instrumenter = Queekiq::Instrumenter.new
+  end
 end
